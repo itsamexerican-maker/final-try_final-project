@@ -1,6 +1,26 @@
 @import "tailwindcss";
 
 /* ============================================================
+   TAILWIND SAFELIST — Add this right after @import "tailwindcss";
+   Prevents Tailwind from purging dynamic class strings that come
+   from Supabase at runtime. All 10 class color combinations must
+   be listed here as complete strings so Tailwind includes them.
+   ============================================================ */
+
+@source inline("
+  bg-red-600 text-red-100 border-red-800
+  bg-green-700 text-green-100 border-green-900
+  bg-amber-500 text-amber-100 border-amber-700
+  bg-orange-600 text-orange-100 border-orange-800
+  bg-lime-600 text-lime-100 border-lime-800
+  bg-blue-700 text-blue-100 border-blue-900
+  bg-purple-700 text-purple-100 border-purple-900
+  bg-slate-700 text-slate-100 border-slate-900
+  bg-pink-600 text-pink-100 border-pink-800
+  bg-yellow-500 text-yellow-100 border-yellow-700
+");
+
+/* ============================================================
    STARTER CHARACTER CREATOR — Global Styles
    Tailwind v4 — all custom tokens live inside @theme inline
    so they become usable as Tailwind utility classes

@@ -13,12 +13,7 @@ type Props = {
 
 export default function CharacterCard({ character }: Props) {
   return (
-    <div
-      className="card-rise flex flex-col rounded-lg overflow-hidden border"
-      style={{
-        background:   "var(--color-parchment-dark)",
-        borderColor:  "var(--color-parchment-deeper)",
-      }}
+    <div className={`card-rise flex flex-col rounded-lg overflow-hidden border-2 ${character.class_color}`}
     >
       {/* ── Avatar image ─────────────────────────────────────── */}
       <div className="relative w-full aspect-square bg-parchment-deeper overflow-hidden">
