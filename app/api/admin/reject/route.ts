@@ -1,7 +1,6 @@
 // app/api/admin/reject/route.ts
-// Rejects (deletes) a pending character card submission.
-// Uses the secret key (admin client) to bypass RLS.
-// Rejection permanently removes the card from the database.
+// Rejects (deletes) a pending submission.
+// Uses the secret key admin client to bypass RLS.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -14,7 +13,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Card ID is required" }, { status: 400 });
     }
 
-    const supabase = await createAdminClient();
+    const supabase = createAdminClient();
 
     const { error } = await supabase
       .from("cards")

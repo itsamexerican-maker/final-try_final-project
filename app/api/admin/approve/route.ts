@@ -1,27 +1,42 @@
 // app/api/admin/approve/route.ts
-// Approves a character card submission.
-// Uses the secret key (admin client) to bypass RLS.
-// Called from the admin panel or directly from the Resend email link.
+// Approves or updates a character card.
+// Uses the secret key admin client to bypass RLS.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { id } = await request.json();
+    const body = await request.json();
+    const { id, update, ...fields } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Card ID is required" }, { status: 400 });
     }
 
-    const supabase = await createAdminClient();
+    // No await needed — createAdminClient is now synchronous
+    const supabase = createAdminClient();
 
-    const { error } = await supabase
-      .from("cards")
-      .update({ approved: true })
-      .eq("id", id);
-
-    if (error) throw error;
+    if (update) {
+      const { error } = await supabase
+        .from("cards")
+        .update({
+          name:      fields.name,
+          race:      fields.race,
+          age:       fields.age,
+          bio:       fields.bio,
+          class_id:  fields.class_id,
+          image_url: fields.image_url,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("cards")
+        .update({ approved: true })
+        .eq("id", id);
+      if (error) throw error;
+    }
 
     return NextResponse.json({ success: true });
 
