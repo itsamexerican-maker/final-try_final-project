@@ -1,65 +1,198 @@
-import Image from "next/image";
+"use client";
+// app/page.tsx
+// Public homepage — fetches all approved character cards from Supabase,
+// displays them in a gallery with class filter buttons and a search bar.
+// UX #1: Loading spinner while data loads
+// UX #4: Toast on fetch error
 
-export default function Home() {
+import { useEffect, useState, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import CharacterCard from "@/components/CharacterCard";
+import ClassFilter from "@/components/ClassFilter";
+import SearchBar from "@/components/SearchBar";
+import LoadingSpinner from "@/components/LoadingSpinner";
+
+// ── Types ────────────────────────────────────────────────────────
+export type Character = {
+  id:         string;
+  name:       string;
+  race:       string;
+  age:        number;
+  bio:        string | null;
+  image_url:  string | null;
+  class_name: string;
+  class_color: string;
+};
+
+export type ClassOption = {
+  id:    number;
+  name:  string;
+  color: string;
+};
+
+// ── Page component ───────────────────────────────────────────────
+export default function HomePage() {
+  const supabase = createClient();
+
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [classes,    setClasses]    = useState<ClassOption[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [search,     setSearch]     = useState("");
+  const [activeClass, setActiveClass] = useState<string>("All");
+
+  // ── Fetch data on mount ────────────────────────────────────────
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+
+      // Fetch approved cards via the convenience view
+      const { data: cards, error: cardsError } = await supabase
+        .from("cards_with_class")
+        .select("*")
+        .eq("approved", true)
+        .order("created_at", { ascending: false });
+
+      if (cardsError) {
+        toast.error("Failed to load characters. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch class list for filter buttons
+      const { data: classData, error: classError } = await supabase
+        .from("class")
+        .select("id, name, color")
+        .order("name");
+
+      if (classError) {
+        toast.error("Failed to load class filters.");
+      }
+
+      setCharacters(cards || []);
+      setClasses(classData || []);
+      setLoading(false);
+    }
+
+    fetchData();
+  }, []);
+
+  // ── Client-side filtering (search + class) ─────────────────────
+  // UX: instant filtering on already-loaded data — no extra requests
+  const filtered = useMemo(() => {
+    return characters.filter((c) => {
+      const matchesClass =
+        activeClass === "All" || c.class_name === activeClass;
+
+      const query = search.toLowerCase();
+      const matchesSearch =
+        !query ||
+        c.name.toLowerCase().includes(query) ||
+        c.race.toLowerCase().includes(query) ||
+        c.class_name.toLowerCase().includes(query);
+
+      return matchesClass && matchesSearch;
+    });
+  }, [characters, activeClass, search]);
+
+  // ── Render ─────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="max-w-7xl mx-auto px-4 py-10">
+
+      {/* ── Hero heading ────────────────────────────────────────── */}
+      <div className="text-center mb-10">
+        <h1
+          className="text-5xl font-bold mb-3"
+          style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+        >
+          The Character Compendium
+        </h1>
+        <p
+          className="text-lg max-w-xl mx-auto"
+          style={{ fontFamily: "var(--font-body)", color: "var(--ink-faded)" }}
+        >
+          Browse adventurers, warriors, and wanderers crafted for your table.
+          Filter by class, search by name, or{" "}
+          <a href="/submit" style={{ color: "var(--gold-dark)" }}>
+            submit your own
+          </a>
+          .
+        </p>
+
+        {/* Decorative divider */}
+        <div className="divider mt-6">
+          <span className="divider-symbol">⚔</span>
+        </div>
+      </div>
+
+      {/* ── Search bar ──────────────────────────────────────────── */}
+      <SearchBar value={search} onChange={setSearch} />
+
+      {/* ── Class filter buttons ─────────────────────────────────── */}
+      <ClassFilter
+        classes={classes}
+        active={activeClass}
+        onSelect={setActiveClass}
+      />
+
+      {/* ── Loading state (UX #1) ────────────────────────────────── */}
+      {loading && <LoadingSpinner message="Summoning characters from the archives…" />}
+
+      {/* ── Empty state ──────────────────────────────────────────── */}
+      {!loading && filtered.length === 0 && (
+        <div className="text-center py-24">
+          <p
+            className="text-4xl mb-4"
+            role="img" aria-label="Empty scroll"
+          >
+            📜
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <h2
+            className="text-2xl font-semibold mb-2"
+            style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
+            No Characters Found
+          </h2>
+          <p style={{ color: "var(--ink-faded)" }}>
+            {search
+              ? `No results for "${search}". Try a different name or class.`
+              : "No characters have been approved yet. Be the first to submit one!"}
+          </p>
           <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/submit"
+            className="inline-block mt-6 px-6 py-3 rounded font-semibold transition-colors"
+            style={{
+              fontFamily:      "var(--font-display)",
+              background:      "var(--gold-dark)",
+              color:           "var(--parchment)",
+              border:          "1px solid var(--gold)",
+            }}
           >
-            Documentation
+            Submit a Character
           </a>
         </div>
-      </main>
+      )}
+
+      {/* ── Character card grid ──────────────────────────────────── */}
+      {!loading && filtered.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-8">
+          {filtered.map((character) => (
+            <CharacterCard key={character.id} character={character} />
+          ))}
+        </div>
+      )}
+
+      {/* ── Result count ─────────────────────────────────────────── */}
+      {!loading && filtered.length > 0 && (
+        <p
+          className="text-center mt-10 text-sm"
+          style={{ color: "var(--ink-faded)", fontFamily: "var(--font-body)" }}
+        >
+          Showing {filtered.length} of {characters.length} character
+          {characters.length !== 1 ? "s" : ""}
+        </p>
+      )}
+
     </div>
   );
 }
