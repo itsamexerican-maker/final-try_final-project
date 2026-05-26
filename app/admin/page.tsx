@@ -40,16 +40,16 @@ const RACES = [
   "Kobold","Orc","Ogre","Aasimar","Tiefling",
 ];
 
-const MAX_FILE_SIZE  = 2 * 1024 * 1024;
-const ALLOWED_TYPES  = ["image/jpeg","image/png","image/webp","image/gif"];
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const ALLOWED_TYPES = ["image/jpeg","image/png","image/webp","image/gif"];
 
 export default function AdminPage() {
   const supabase = createClient();
 
-  const [pending,   setPending]   = useState<Card[]>([]);
-  const [approved,  setApproved]  = useState<Card[]>([]);
-  const [classes,   setClasses]   = useState<ClassOption[]>([]);
-  const [loading,   setLoading]   = useState(true);
+  const [pending,  setPending]  = useState<Card[]>([]);
+  const [approved, setApproved] = useState<Card[]>([]);
+  const [classes,  setClasses]  = useState<ClassOption[]>([]);
+  const [loading,  setLoading]  = useState(true);
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -72,9 +72,9 @@ export default function AdminPage() {
       supabase.from("cards_with_class").select("*").eq("approved", true).order("created_at", { ascending: false }),
       supabase.from("class").select("id, name, color").order("name"),
     ]);
-    setPending(pendingRes.data  || []);
+    setPending(pendingRes.data   || []);
     setApproved(approvedRes.data || []);
-    setClasses(classRes.data   || []);
+    setClasses(classRes.data     || []);
     setLoading(false);
   }
 
@@ -134,19 +134,22 @@ export default function AdminPage() {
   }
 
   // ── Start editing a card ─────────────────────────────────────
+  // cards_with_class view returns class_name but not class_id,
+  // so we match the class name against the classes list to get the id.
   function startEdit(card: Card) {
     setEditingId(card.id);
+    const matchedClass = classes.find((c) => c.name === card.class_name);
     setEditForm({
       name:    card.name,
       race:    card.race,
       age:     card.age,
       bio:     card.bio ?? "",
-      classId: String(card.class_id ?? ""),
+      classId: matchedClass ? String(matchedClass.id) : "",
     });
     setEditImage(null);
   }
 
-  // ── Save edits ───────────────────────────────────────────────
+  // ── Save edits via admin API route (uses secret key) ────────
   async function handleSave(cardId: string, currentImageUrl: string | null) {
     setSaving(true);
     try {
@@ -172,6 +175,7 @@ export default function AdminPage() {
         image_url = urlData.publicUrl;
       }
 
+      // Use the API route only — it uses the secret key to bypass RLS
       const res = await fetch("/api/admin/approve", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
@@ -187,17 +191,7 @@ export default function AdminPage() {
         }),
       });
 
-      // Use supabase directly for update since approve route only patches approved flag
-      const { error } = await supabase.from("cards").update({
-        name:      editForm.name,
-        race:      editForm.race,
-        age:       Number(editForm.age),
-        bio:       editForm.bio || null,
-        class_id:  Number(editForm.classId),
-        image_url,
-      }).eq("id", cardId);
-
-      if (error) throw error;
+      if (!res.ok) throw new Error("Save failed");
 
       toast.success("Character updated!");
       setEditingId(null);
@@ -211,7 +205,16 @@ export default function AdminPage() {
 
   // ── DeepSeek: regenerate bio for a card being edited ────────
   async function handleRegenBio(cardId: string) {
-    const className = classes.find((c) => String(c.id) === editForm.classId)?.name ?? "";
+    const currentCard = approved.find((c) => c.id === cardId);
+    const className = classes.find((c) => String(c.id) === String(editForm.classId))?.name
+      ?? currentCard?.class_name
+      ?? "";
+
+    if (!className) {
+      toast.error("Could not determine class for bio generation.");
+      return;
+    }
+
     setGenBio(true);
     try {
       const res = await fetch("/api/randomize", {
@@ -219,10 +222,10 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           mode:      "bio",
-          name:      editForm.name,
-          race:      editForm.race,
+          name:      editForm.name      ?? currentCard?.name ?? "",
+          race:      editForm.race      ?? currentCard?.race ?? "",
           className,
-          age:       editForm.age,
+          age:       editForm.age       ?? currentCard?.age  ?? "",
         }),
       });
       const data = await res.json();
@@ -236,7 +239,7 @@ export default function AdminPage() {
     }
   }
 
-  // ── Shared styles ────────────────────────────────────────────
+  // ── Shared input styles ──────────────────────────────────────
   const inputClass = "w-full px-2 py-1 rounded border text-sm outline-none";
   const inputStyle = {
     fontFamily:  "var(--font-body)",
@@ -285,7 +288,6 @@ export default function AdminPage() {
                   borderColor: "var(--color-parchment-deeper)",
                 }}
               >
-                {/* Avatar */}
                 <div className="relative w-16 h-16 flex-shrink-0 rounded overflow-hidden">
                   <Image
                     src={card.image_url || `https://robohash.org/${card.id}?set=set2&size=80x80`}
@@ -295,8 +297,6 @@ export default function AdminPage() {
                     sizes="64px"
                   />
                 </div>
-
-                {/* Details */}
                 <div className="flex-1 min-w-0">
                   <p className="font-bold" style={{ fontFamily: "var(--font-display)" }}>
                     {card.name}
@@ -310,28 +310,18 @@ export default function AdminPage() {
                     </p>
                   )}
                 </div>
-
-                {/* Actions */}
                 <div className="flex gap-2 flex-shrink-0">
                   <button
                     onClick={() => handleApprove(card.id)}
                     className="px-3 py-1 rounded text-sm font-semibold"
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      background: "#2d6a2d",
-                      color:      "#f4e9d0",
-                    }}
+                    style={{ fontFamily: "var(--font-display)", background: "#2d6a2d", color: "#f4e9d0" }}
                   >
                     Approve
                   </button>
                   <button
                     onClick={() => handleReject(card.id)}
                     className="px-3 py-1 rounded text-sm font-semibold"
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      background: "#8b1a1a",
-                      color:      "#f4e9d0",
-                    }}
+                    style={{ fontFamily: "var(--font-display)", background: "#8b1a1a", color: "#f4e9d0" }}
                   >
                     Reject
                   </button>
