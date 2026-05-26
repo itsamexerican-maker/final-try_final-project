@@ -21,7 +21,9 @@ export async function POST(request: NextRequest) {
     }
 
     const adminEmail = process.env.ADMIN_NOTIFY_EMAIL ?? "";
-    const siteUrl    = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.VERCEL_URL 
+  ? `https://${process.env.VERCEL_URL}` 
+  : "http://localhost:3000";
 
     await resend.emails.send({
       from:    "Character Compendium <onboarding@resend.dev>",
